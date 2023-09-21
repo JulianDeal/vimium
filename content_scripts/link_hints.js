@@ -404,9 +404,10 @@ class LinkHintsMode {
     if (this.currentZIndex == null) {
       // This is the starting z-index value; it produces z-index values which are greater than all
       // of the other z-index values used by Vimium.
-      this.currentZIndex = 2140000000;
+      this.currentZIndex = 2147483647;
     }
-    return ++this.currentZIndex;
+    // return ++this.currentZIndex;
+    return this.currentZIndex;
   }
 
   setOpenLinkMode(mode, shouldPropagateToOtherFrames) {
