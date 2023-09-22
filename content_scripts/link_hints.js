@@ -38,6 +38,7 @@ class LocalHint {
   element; // The clickable element.
   image; // When element is an <area> (image map), `image` is its associated image.
   rect; // The rectangle where the hint should shown, to avoid overlapping with other hints.
+  zIndex; // The z-index of the element
   linkText; // Used in FilterHints.
   showLinkText; // Used in FilterHints.
   // The reason that an element has a link hint when the reason isn't obvious, e.g. the body of a
@@ -233,7 +234,15 @@ const HintCoordinator = {
     ));
     return this.localHintDescriptors;
   },
-
+  getMaxZIndex() {
+    localHints = this.localHints
+    if (!localHints || localHints.length == 0) {
+      console.log("No local hints found, returning 0")
+      return 0; // TODO 0 or 1?
+    }
+    const maxValue = Math.max(localHints.map((h) => h.zIndex))
+    return maxValue
+  },
   // We activate LinkHintsMode() in every frame and provide every frame with exactly the same hint
   // descriptors. We also propagate the key state between frames. Therefore, the hint-selection
   // process proceeds in lock step in every frame, and this.linkHintsMode is in the same state in
@@ -256,7 +265,8 @@ const HintCoordinator = {
     if (frameId !== originatingFrameId) {
       this.onExit = [];
     }
-    this.linkHintsMode = new LinkHintsMode(hintDescriptors, availableModes[modeIndex]);
+    maxZIndex = this.getMaxZIndex(); // TODO Look if this can go into LinkHintsMode itself
+    this.linkHintsMode = new LinkHintsMode(hintDescriptors, availableModes[modeIndex], maxZIndex);
     // Replay keydown events which we missed (but for filtered hints only).
     if (Settings.get("filterLinkHints" && this.cacheAllKeydownEvents)) {
       this.cacheAllKeydownEvents.replayKeydownEvents();
@@ -342,11 +352,15 @@ const LinkHints = {
 
 class LinkHintsMode {
   // @mode: One of the enums listed at the top of this file.
-  constructor(hintDescriptors, mode) {
+  constructor(hintDescriptors, mode, maxZIndex) {
     if (mode == null) mode = OPEN_IN_CURRENT_TAB;
+    this.maxZIndex = 0;
+    console.log("Creating Link hints")
+
     this.mode = mode;
     // We need documentElement to be ready in order to append links.
     if (!document.documentElement) return;
+    console.log("", LinkHints)
 
     this.hintMarkerContainingDiv = null;
     // Function that does the appropriate action on the selected link.
@@ -405,38 +419,13 @@ class LinkHintsMode {
 
   // Increments and returns the Z index that should be used for the next hint marker on the page.
   getNextZIndex() {
-    // const getZ = (e) => {return parseInt(window.getComputedStyle(e).zIndex) || 0}
-    // const listOfElements = Array.from(document.querySelectorAll("*")).sort((a, b) =>
-    //   getZ(b) - getZ(a)).slice(0, 5)
-    // console.log(listOfElements.map(e => [e.className, getZ(e)]))
-    // const listOfZ = Array.from(document.querySelectorAll("*"))
-    //   .map((e) => parseInt(window.getComputedStyle(e).zIndex));
-    // const maxZ = Math.max.apply(null,
-    //   listOfZ || 0
-    // );
-
-
-
     if (this.currentZIndex == null) {
+      console.log('Getting', LocalHints)
       // This is the starting z-index value; it produces z-index values which are greater than all
       // of the other z-index values used by Vimium.
-      // Set the z-index of link hints to be just above the maximum z-index of elements on the page.
-      // this.currentZIndex = maxZ + 1;
-      this.currentZIndex =
-      // console.log("current z-index: ", this.currentZIndex)
-      // const highestZIndexes = Array.from(document.querySelectorAll("*"))
-      //   .map((e) => parseInt(window.getComputedStyle(e).zIndex) || 0).sort().slice(-5);
-      // console.log(highestZindexes.pop()
-      // )
-      const listOfZ = Array.from(document.querySelectorAll("*"))
-        .map((e) => parseInt(window.getComputedStyle(e).zIndex));
-      const maxZ = Math.max.apply(null,
-        listOfZ || 0
-      );
+      this.currentZIndex = 24700000001;
     }
-    // console.log("current z-index: ", this.currentZIndex)
-    return this.currentZIndex;
-    // return this.currentZIndex;
+    return ++this.currentZIndex;
   }
 
   setOpenLinkMode(mode, shouldPropagateToOtherFrames) {
@@ -469,13 +458,13 @@ class LinkHintsMode {
     const marker = new HintMarker();
     const isLocalMarker = desc.frameId === frameId;
     if (isLocalMarker) {
-      console.log(desc)
       const localHint = HintCoordinator.getLocalHint(desc);
       const el = DomUtils.createElement("div");
       el.style.left = localHint.rect.left + "px";
       el.style.top = localHint.rect.top + "px";
       // Each hint marker is assigned a different z-index.
-      el.style.zIndex = this.getNextZIndex();
+      console.log("z", zIndex)
+      el.style.zIndex = localHint.zIndex;
       el.className = "vimiumReset internalVimiumHintMarker vimiumHintMarker";
       Object.assign(marker, {
         element: el,
@@ -1060,6 +1049,7 @@ const spanWrap = (hintString) => {
   return innerHTML.join("");
 };
 
+
 const LocalHints = {
   // Returns an array of LocalHints if the element is visible and clickable, and computes the rect
   // which bounds this element in the viewport. We return an array because there may be more than
@@ -1249,7 +1239,26 @@ const LocalHints = {
       onlyHasTabIndex = true;
     }
 
+    const findNonAutoZIndex = (element) => {
+      if (!element) {
+        return 0;
+      }
+
+      const computedStyle = window.getComputedStyle(element);
+      const zIndex = computedStyle.getPropertyValue('z-index');
+
+      if (zIndex !== 'auto') {
+          return zIndex;
+      }
+
+      // If the current element has "auto" z-index, check its parent recursively
+      return findNonAutoZIndex(element.parentElement);
+    }
+
     if (isClickable) {
+
+      zIndex = findNonAutoZIndex(element) + 1;
+
       // An image map has multiple clickable areas, and so can represent multiple LocalHints.
       if (imageMapAreas.length > 0) {
         const mapHints = imageMapAreas.map((areaAndRect) => {
@@ -1258,6 +1267,7 @@ const LocalHints = {
             image: element,
             // element,
             rect: areaAndRect.rect,
+            zIndex: zIndex,
             secondClassCitizen: onlyHasTabIndex,
             possibleFalsePositive,
             reason,
@@ -1270,6 +1280,7 @@ const LocalHints = {
           const hint = new LocalHint({
             element,
             rect: clientRect,
+            zIndex: zIndex,
             secondClassCitizen: onlyHasTabIndex,
             possibleFalsePositive,
             reason,
