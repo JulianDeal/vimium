@@ -391,23 +391,52 @@ class LinkHintsMode {
 
     // Append these markers as top level children instead of as child nodes to the link itself,
     // because some clickable elements cannot contain children, e.g. submit buttons.
+    if (document.querySelector("dialog") != null) {
+      console.log("Dialog is present")
+    }
+
     this.hintMarkerContainingDiv = DomUtils.addElementsToPage(
       this.hintMarkers.filter((m) => m.isLocalMarker()).map((m) => m.element),
       { id: "vimiumHintMarkerContainer", className: "vimiumReset" },
-    );
 
+    );
     this.setIndicator();
   }
 
   // Increments and returns the Z index that should be used for the next hint marker on the page.
   getNextZIndex() {
+    // const getZ = (e) => {return parseInt(window.getComputedStyle(e).zIndex) || 0}
+    // const listOfElements = Array.from(document.querySelectorAll("*")).sort((a, b) =>
+    //   getZ(b) - getZ(a)).slice(0, 5)
+    // console.log(listOfElements.map(e => [e.className, getZ(e)]))
+    // const listOfZ = Array.from(document.querySelectorAll("*"))
+    //   .map((e) => parseInt(window.getComputedStyle(e).zIndex));
+    // const maxZ = Math.max.apply(null,
+    //   listOfZ || 0
+    // );
+
+
+
     if (this.currentZIndex == null) {
       // This is the starting z-index value; it produces z-index values which are greater than all
       // of the other z-index values used by Vimium.
-      this.currentZIndex = 2147483647;
+      // Set the z-index of link hints to be just above the maximum z-index of elements on the page.
+      // this.currentZIndex = maxZ + 1;
+      this.currentZIndex =
+      // console.log("current z-index: ", this.currentZIndex)
+      // const highestZIndexes = Array.from(document.querySelectorAll("*"))
+      //   .map((e) => parseInt(window.getComputedStyle(e).zIndex) || 0).sort().slice(-5);
+      // console.log(highestZindexes.pop()
+      // )
+      const listOfZ = Array.from(document.querySelectorAll("*"))
+        .map((e) => parseInt(window.getComputedStyle(e).zIndex));
+      const maxZ = Math.max.apply(null,
+        listOfZ || 0
+      );
     }
-    // return ++this.currentZIndex;
+    // console.log("current z-index: ", this.currentZIndex)
     return this.currentZIndex;
+    // return this.currentZIndex;
   }
 
   setOpenLinkMode(mode, shouldPropagateToOtherFrames) {
@@ -440,6 +469,7 @@ class LinkHintsMode {
     const marker = new HintMarker();
     const isLocalMarker = desc.frameId === frameId;
     if (isLocalMarker) {
+      console.log(desc)
       const localHint = HintCoordinator.getLocalHint(desc);
       const el = DomUtils.createElement("div");
       el.style.left = localHint.rect.left + "px";
@@ -587,6 +617,7 @@ class LinkHintsMode {
 
   // Rotate the hints' z-index values so that hidden hints become visible.
   rotateHints() {
+    console.log("Rotating hints")
     // Get local, visible hint markers.
     const localHintMarkers = this.hintMarkers.filter((m) =>
       m.isLocalMarker() && (m.element.style.display !== "none")
@@ -601,6 +632,7 @@ class LinkHintsMode {
 
     // Calculate the overlapping groups of hints. We call each group a "stack". This is O(n^2).
     let stacks = [];
+    console.log(localHintMarkers.length, localHintMarkers)
     for (const marker of localHintMarkers) {
       let stackForThisMarker = null;
       const results = [];
@@ -1189,6 +1221,9 @@ const LocalHints = {
       case "details":
         isClickable = true;
         reason = "Open.";
+        break;
+      case "dialog":
+        console.log(`Dialog found:\n${element}`);
         break;
     }
 
