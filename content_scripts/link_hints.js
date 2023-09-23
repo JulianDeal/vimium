@@ -164,6 +164,7 @@ const HintCoordinator = {
   onExit: [],
   localHints: null,
   cacheAllKeydownEvents: null,
+  maxZIndex: 0,
 
   // Returns if the HintCoordinator will handle a given LinkHintsMessage.
   // Some messages will not be handled in the case where the help dialog is shown, and is then
@@ -223,9 +224,12 @@ const HintCoordinator = {
     if (isVimiumHelpDialog && !window.isVimiumHelpDialog) {
       this.localHints = [];
     } else {
+      console.time()
       this.localHints = LocalHints.getLocalHints(requireHref);
+      console.timeEnd()
     }
-    this.localHintDescriptors = this.localHints.map(({ linkText }, localIndex) => (
+    this.maxZIndex = this.getMaxZIndex();
+    this.localHintDescriptors = this.localHints.map(({ linkText }, localIndex, zIndex) => (
       new HintDescriptor({
         frameId,
         localIndex,
@@ -235,13 +239,15 @@ const HintCoordinator = {
     return this.localHintDescriptors;
   },
   getMaxZIndex() {
-    localHints = this.localHints
+    localHints = this.localHints;
     if (!localHints || localHints.length == 0) {
-      console.log("No local hints found, returning 0")
       return 0; // TODO 0 or 1?
     }
-    const maxValue = Math.max(localHints.map((h) => h.zIndex))
-    return maxValue
+    allZIndices = localHints.map((h) => h.zIndex);
+    allZIndicesWithEl = localHints.map((h) => [h, h.zIndex]);
+    console.log(allZIndicesWithEl)
+    const maxValue = Math.max(...allZIndices);
+    return maxValue || 0;
   },
   // We activate LinkHintsMode() in every frame and provide every frame with exactly the same hint
   // descriptors. We also propagate the key state between frames. Therefore, the hint-selection
@@ -265,8 +271,7 @@ const HintCoordinator = {
     if (frameId !== originatingFrameId) {
       this.onExit = [];
     }
-    maxZIndex = this.getMaxZIndex(); // TODO Look if this can go into LinkHintsMode itself
-    this.linkHintsMode = new LinkHintsMode(hintDescriptors, availableModes[modeIndex], maxZIndex);
+    this.linkHintsMode = new LinkHintsMode(hintDescriptors, availableModes[modeIndex]);
     // Replay keydown events which we missed (but for filtered hints only).
     if (Settings.get("filterLinkHints" && this.cacheAllKeydownEvents)) {
       this.cacheAllKeydownEvents.replayKeydownEvents();
@@ -352,15 +357,13 @@ const LinkHints = {
 
 class LinkHintsMode {
   // @mode: One of the enums listed at the top of this file.
-  constructor(hintDescriptors, mode, maxZIndex) {
+  constructor(hintDescriptors, mode) {
     if (mode == null) mode = OPEN_IN_CURRENT_TAB;
-    this.maxZIndex = 0;
     console.log("Creating Link hints")
 
     this.mode = mode;
     // We need documentElement to be ready in order to append links.
     if (!document.documentElement) return;
-    console.log("", LinkHints)
 
     this.hintMarkerContainingDiv = null;
     // Function that does the appropriate action on the selected link.
@@ -420,10 +423,12 @@ class LinkHintsMode {
   // Increments and returns the Z index that should be used for the next hint marker on the page.
   getNextZIndex() {
     if (this.currentZIndex == null) {
-      console.log('Getting', LocalHints)
       // This is the starting z-index value; it produces z-index values which are greater than all
       // of the other z-index values used by Vimium.
-      this.currentZIndex = 24700000001;
+      // this.currentZIndex = Math.max(2140000001, HintCoordinator.maxZIndex); // TODO This may fuck up rotating, when cookie banner was present
+      this.currentZIndex = 2140000001;
+      console.log("Min Z-Index = ", this.currentZIndex)
+
     }
     return ++this.currentZIndex;
   }
@@ -463,8 +468,10 @@ class LinkHintsMode {
       el.style.left = localHint.rect.left + "px";
       el.style.top = localHint.rect.top + "px";
       // Each hint marker is assigned a different z-index.
-      console.log("z", zIndex)
-      el.style.zIndex = localHint.zIndex;
+      zIndex = Math.max(this.getNextZIndex(), localHint.zIndex + 1)
+      console.log("Zindex", zIndex)
+      //
+      el.style.zIndex = zIndex;
       el.className = "vimiumReset internalVimiumHintMarker vimiumHintMarker";
       Object.assign(marker, {
         element: el,
@@ -606,7 +613,6 @@ class LinkHintsMode {
 
   // Rotate the hints' z-index values so that hidden hints become visible.
   rotateHints() {
-    console.log("Rotating hints")
     // Get local, visible hint markers.
     const localHintMarkers = this.hintMarkers.filter((m) =>
       m.isLocalMarker() && (m.element.style.display !== "none")
@@ -648,6 +654,7 @@ class LinkHintsMode {
         stacks.push([marker]);
       }
     }
+    console.log(stacks)
 
     // Rotate the z-indexes within each stack.
     for (const stack of stacks) {
@@ -1257,7 +1264,7 @@ const LocalHints = {
 
     if (isClickable) {
 
-      zIndex = findNonAutoZIndex(element) + 1;
+      zIndex = parseInt(findNonAutoZIndex(element));
 
       // An image map has multiple clickable areas, and so can represent multiple LocalHints.
       if (imageMapAreas.length > 0) {
