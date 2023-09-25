@@ -38,7 +38,6 @@ class LocalHint {
   element; // The clickable element.
   image; // When element is an <area> (image map), `image` is its associated image.
   rect; // The rectangle where the hint should shown, to avoid overlapping with other hints.
-  parentZIndex; // Tracking z-Index of parent.
   linkText; // Used in FilterHints.
   showLinkText; // Used in FilterHints.
   // The reason that an element has a link hint when the reason isn't obvious, e.g. the body of a
@@ -365,19 +364,9 @@ class LinkHintsMode {
     // This count is used to rank equal-scoring hints when sorting, thereby making JavaScript's sort
     // stable.
     this.stableSortCount = 0;
-
-    console.log("Searching for dialogs")
-    const dialogs = document.getElementsByTagName("dialog");
-    this.isDialogPresent = false;
-    if (dialogs[0]) {
-      this.isDialogPresent = true;
-      console.log("Dialog found: ", dialogs)
-      console.log("HMC", this.hintMarkerContainingDiv)
-    }
-
+    this.dialogElement = DomUtils.getDialogElement();
     this.hintMarkers = hintDescriptors.map((desc) => this.createMarkerFor(desc));
     this.markerMatcher = Settings.get("filterLinkHints") ? new FilterHints() : new AlphabetHints();
-
     this.markerMatcher.fillInMarkers(this.hintMarkers, this.getNextZIndex.bind(this));
 
     this.hintMode = new Mode();
@@ -407,9 +396,9 @@ class LinkHintsMode {
       this.hintMarkers.filter((m) => m.isLocalMarker()).map((m) => m.element),
       { id: "vimiumHintMarkerContainer", className: "vimiumReset" },
     );
-
-    if (this.isDialogPresent) {
-      dialogs[0].appendChild(this.hintMarkerContainingDiv)
+    if (this.dialogElement !== null) {
+      // Injecting the hint container into the dialog
+      this.dialogElement.appendChild(this.hintMarkerContainingDiv)
     }
 
     this.setIndicator();
@@ -450,7 +439,6 @@ class LinkHintsMode {
     }
   }
 
-
   // Creates a link marker for the given link.
   createMarkerFor(desc) {
     const marker = new HintMarker();
@@ -458,21 +446,15 @@ class LinkHintsMode {
     if (isLocalMarker) {
       const localHint = HintCoordinator.getLocalHint(desc);
       const el = DomUtils.createElement("div");
-      console.log(localHint)
-      if (this.isDialogPresent) {
-          console.log("Dialog present = True");
-          localHint.rect.left -= window.scrollX;
-          localHint.rect.top -= window.scrollY;
+      // Account for scrollPostition in dialogs.
+      if (this.dialogElement !== null) {
+        localHint.rect.left -= window.scrollX;
+        localHint.rect.top -= window.scrollY;
       }
-
       el.style.left = localHint.rect.left + "px";
       el.style.top = localHint.rect.top + "px";
       // Each hint marker is assigned a different z-index.
-      // If a clickable element has zIndex > nextZIndex, we use this z-index + 1.
-      // Rotation may not work for these hints in some cases but they are not obscured anymore.
-      // This was a long time issue especially with cookie banners.
-      const zIndex = Math.max(this.getNextZIndex(), localHint.parentZIndex + 1);
-      el.style.zIndex = zIndex;
+      el.style.zIndex = this.getNextZIndex();
       el.className = "vimiumReset internalVimiumHintMarker vimiumHintMarker";
       Object.assign(marker, {
         element: el,
@@ -1241,10 +1223,7 @@ const LocalHints = {
       onlyHasTabIndex = true;
     }
 
-
     if (isClickable) {
-      // Track z-Index to prevent obscuring of link hints.
-      const zIndex = DomUtils.findNonAutoZIndex(element);
       // An image map has multiple clickable areas, and so can represent multiple LocalHints.
       if (imageMapAreas.length > 0) {
         const mapHints = imageMapAreas.map((areaAndRect) => {
@@ -1253,7 +1232,6 @@ const LocalHints = {
             image: element,
             // element,
             rect: areaAndRect.rect,
-            parentZIndex: zIndex,
             secondClassCitizen: onlyHasTabIndex,
             possibleFalsePositive,
             reason,
@@ -1262,15 +1240,10 @@ const LocalHints = {
         hints.push(...mapHints);
       } else {
         const clientRect = DomUtils.getVisibleClientRect(element, true);
-        // console.log("element")
-        // console.log(element)
-        // console.log(clientRect)
-        // console.log(element.getClientRects())
         if (clientRect !== null) {
           const hint = new LocalHint({
             element,
             rect: clientRect,
-            parentZIndex: zIndex,
             secondClassCitizen: onlyHasTabIndex,
             possibleFalsePositive,
             reason,
