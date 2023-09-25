@@ -397,6 +397,14 @@ class LinkHintsMode {
       { id: "vimiumHintMarkerContainer", className: "vimiumReset" },
     );
 
+    console.log("Searching for dialogs")
+      const dialog = document.getElementsByTagName("dialog")
+      if (dialog.length) {
+        console.log("Dialog found: ", dialog)
+        console.log("HMC", this.hintMarkerContainingDiv)
+        dialog[0].appendChild(this.hintMarkerContainingDiv)
+      }
+
     this.setIndicator();
   }
 
@@ -1238,6 +1246,10 @@ const LocalHints = {
         hints.push(...mapHints);
       } else {
         const clientRect = DomUtils.getVisibleClientRect(element, true);
+        // console.log("element")
+        // console.log(element)
+        // console.log(clientRect)
+        // console.log(element.getClientRects())
         if (clientRect !== null) {
           const hint = new LocalHint({
             element,
