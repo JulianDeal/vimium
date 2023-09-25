@@ -365,8 +365,19 @@ class LinkHintsMode {
     // This count is used to rank equal-scoring hints when sorting, thereby making JavaScript's sort
     // stable.
     this.stableSortCount = 0;
+
+    console.log("Searching for dialogs")
+    const dialogs = document.getElementsByTagName("dialog");
+    this.isDialogPresent = false;
+    if (dialogs[0]) {
+      this.isDialogPresent = true;
+      console.log("Dialog found: ", dialogs)
+      console.log("HMC", this.hintMarkerContainingDiv)
+    }
+
     this.hintMarkers = hintDescriptors.map((desc) => this.createMarkerFor(desc));
     this.markerMatcher = Settings.get("filterLinkHints") ? new FilterHints() : new AlphabetHints();
+
     this.markerMatcher.fillInMarkers(this.hintMarkers, this.getNextZIndex.bind(this));
 
     this.hintMode = new Mode();
@@ -397,13 +408,9 @@ class LinkHintsMode {
       { id: "vimiumHintMarkerContainer", className: "vimiumReset" },
     );
 
-    console.log("Searching for dialogs")
-      const dialog = document.getElementsByTagName("dialog")
-      if (dialog.length) {
-        console.log("Dialog found: ", dialog)
-        console.log("HMC", this.hintMarkerContainingDiv)
-        dialog[0].appendChild(this.hintMarkerContainingDiv)
-      }
+    if (this.isDialogPresent) {
+      dialogs[0].appendChild(this.hintMarkerContainingDiv)
+    }
 
     this.setIndicator();
   }
@@ -443,6 +450,7 @@ class LinkHintsMode {
     }
   }
 
+
   // Creates a link marker for the given link.
   createMarkerFor(desc) {
     const marker = new HintMarker();
@@ -450,13 +458,20 @@ class LinkHintsMode {
     if (isLocalMarker) {
       const localHint = HintCoordinator.getLocalHint(desc);
       const el = DomUtils.createElement("div");
+      console.log(localHint)
+      if (this.isDialogPresent) {
+          console.log("Dialog present = True");
+          localHint.rect.left -= window.scrollX;
+          localHint.rect.top -= window.scrollY;
+      }
+
       el.style.left = localHint.rect.left + "px";
       el.style.top = localHint.rect.top + "px";
       // Each hint marker is assigned a different z-index.
       // If a clickable element has zIndex > nextZIndex, we use this z-index + 1.
       // Rotation may not work for these hints in some cases but they are not obscured anymore.
       // This was a long time issue especially with cookie banners.
-      zIndex = Math.max(this.getNextZIndex(), localHint.parentZIndex + 1);
+      const zIndex = Math.max(this.getNextZIndex(), localHint.parentZIndex + 1);
       el.style.zIndex = zIndex;
       el.className = "vimiumReset internalVimiumHintMarker vimiumHintMarker";
       Object.assign(marker, {
@@ -1226,9 +1241,10 @@ const LocalHints = {
       onlyHasTabIndex = true;
     }
 
+
     if (isClickable) {
       // Track z-Index to prevent obscuring of link hints.
-      zIndex = DomUtils.findNonAutoZIndex(element);
+      const zIndex = DomUtils.findNonAutoZIndex(element);
       // An image map has multiple clickable areas, and so can represent multiple LocalHints.
       if (imageMapAreas.length > 0) {
         const mapHints = imageMapAreas.map((areaAndRect) => {
