@@ -40,6 +40,7 @@ class LocalHint {
   rect; // The rectangle where the hint should shown, to avoid overlapping with other hints.
   linkText; // Used in FilterHints.
   showLinkText; // Used in FilterHints.
+  parentDialog;
   // The reason that an element has a link hint when the reason isn't obvious, e.g. the body of a
   // frame so that the frame can be focused. This reason is shown to the user in the hint's caption.
   reason;
@@ -447,7 +448,7 @@ class LinkHintsMode {
       const localHint = HintCoordinator.getLocalHint(desc);
       const el = DomUtils.createElement("div");
       // Account for scrollPostition in dialogs.
-      if (this.dialogElement !== null) {
+      if (localHint.parentDialog !== null) {
         localHint.rect.left -= window.scrollX;
         localHint.rect.top -= window.scrollY;
       }
@@ -1224,6 +1225,7 @@ const LocalHints = {
     }
 
     if (isClickable) {
+      const parentDialog = DomUtils.getParentByTagName("dialog", element);
       // An image map has multiple clickable areas, and so can represent multiple LocalHints.
       if (imageMapAreas.length > 0) {
         const mapHints = imageMapAreas.map((areaAndRect) => {
@@ -1231,6 +1233,7 @@ const LocalHints = {
             element: areaAndRect.element,
             image: element,
             // element,
+            parentDialog: parentDialog,
             rect: areaAndRect.rect,
             secondClassCitizen: onlyHasTabIndex,
             possibleFalsePositive,
@@ -1244,6 +1247,7 @@ const LocalHints = {
           const hint = new LocalHint({
             element,
             rect: clientRect,
+            parentDialog: parentDialog,
             secondClassCitizen: onlyHasTabIndex,
             possibleFalsePositive,
             reason,
