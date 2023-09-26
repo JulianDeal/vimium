@@ -449,8 +449,14 @@ class LinkHintsMode {
       const el = DomUtils.createElement("div");
       // Account for scrollPostition in dialogs.
       if (localHint.parentDialog !== null) {
-        localHint.rect.left -= window.scrollX;
-        localHint.rect.top -= window.scrollY;
+        if (!DomUtils.getParentByTagName(null, localHint.parentDialog)) {
+          console.log("Accounting for ", localHint.element)
+          console.log("Parent ", DomUtils.getParentByTagName(null, localHint.parentDialog))
+          localHint.rect.left -= window.scrollX;
+          localHint.rect.top -= window.scrollY;
+        } else {
+          console.log("Pfui")
+        }
       }
       el.style.left = localHint.rect.left + "px";
       el.style.top = localHint.rect.top + "px";
