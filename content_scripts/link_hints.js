@@ -40,7 +40,8 @@ class LocalHint {
   rect; // The rectangle where the hint should shown, to avoid overlapping with other hints.
   linkText; // Used in FilterHints.
   showLinkText; // Used in FilterHints.
-  parentDialog;
+  parentDialog; // When the corresponding clickable is child of a dialog, `parentDialog`
+  // is the parent which is a dialog.
   // The reason that an element has a link hint when the reason isn't obvious, e.g. the body of a
   // frame so that the frame can be focused. This reason is shown to the user in the hint's caption.
   reason;
@@ -349,7 +350,7 @@ class LinkHintsMode {
     // We need documentElement to be ready in order to append links.
     if (!document.documentElement) return;
 
-    this.hintMarkerContainingDiv = null;
+    this.hintMarkerContainingDivs = null;
     // Function that does the appropriate action on the selected link.
     this.linkActivator = undefined;
     // The link-hints "mode" (in the key-handler, indicator sense).
@@ -365,7 +366,6 @@ class LinkHintsMode {
     // This count is used to rank equal-scoring hints when sorting, thereby making JavaScript's sort
     // stable.
     this.stableSortCount = 0;
-    this.dialogElement = DomUtils.getDialogElement();
     this.hintMarkers = hintDescriptors.map((desc) => this.createMarkerFor(desc));
     this.markerMatcher = Settings.get("filterLinkHints") ? new FilterHints() : new AlphabetHints();
     this.markerMatcher.fillInMarkers(this.hintMarkers, this.getNextZIndex.bind(this));
@@ -391,18 +391,38 @@ class LinkHintsMode {
       }
     });
 
-    // Append these markers as top level children instead of as child nodes to the link itself,
-    // because some clickable elements cannot contain children, e.g. submit buttons.
-    this.hintMarkerContainingDiv = DomUtils.addElementsToPage(
-      this.hintMarkers.filter((m) => m.isLocalMarker()).map((m) => m.element),
-      { id: "vimiumHintMarkerContainer", className: "vimiumReset" },
-    );
-    if (this.dialogElement !== null) {
-      // Injecting the hint container into the dialog
-      this.dialogElement.appendChild(this.hintMarkerContainingDiv)
-    }
-
+    this.createMarkerHintContainers();
     this.setIndicator();
+  }
+
+  // Append these markers as top level children instead of as child nodes to the link itself,
+  // because some clickable elements cannot contain children, e.g. submit buttons.
+  // If dialogs are present, they get assigned their own container div.
+  createMarkerHintContainers() {
+    // Bucket dialog and the document (hint.parentDialog = null) and their respective
+    // HintMarkers.
+    const markerContainers = new Map();
+    this.hintMarkers.forEach((marker) => {
+      if (!marker.isLocalMarker()) return;
+      const parentDialog = marker.localHint.parentDialog;
+      if (!markerContainers.has(parentDialog))
+        markerContainers.set(parentDialog, []);
+      markerContainers.get(parentDialog).push(marker);
+    });
+
+    this.hintMarkerContainingDivs = new Map();
+
+    // Create the divs
+    this.markerContainers.forEach((markers, topLevelContainer) => {
+      const elements = markers.map((m) => m.element);
+      const containerDiv = DomUtils.addElementsToPage(
+        elements,
+        { id: "vimiumHintMarkerContainer", className: "vimiumReset" });
+      if (topLevelContainer !== null) {
+        topLevelContainer.appendChild(containerDiv);
+      }
+      this.hintMarkerContainingDivs.set(topLevelContainer, containerDiv);
+    });
   }
 
   // Increments and returns the Z index that should be used for the next hint marker on the page.
@@ -448,17 +468,12 @@ class LinkHintsMode {
       const localHint = HintCoordinator.getLocalHint(desc);
       const el = DomUtils.createElement("div");
       // Account for scrollPostition in dialogs.
-      console.log(localHint)
       if (localHint.parentDialog !== null) {
-          console.log("Parent ", DomUtils.getParentByTagName("iframe", localHint.parentDialog))
-          console.log(localHint.parentDialog)
-        if (!DomUtils.getParentByTagName("iframe", localHint.parentDialog)) {
-          console.log("Accounting for ", localHint.element)
-          localHint.rect.left -= window.scrollX;
-          // localHint.rect.top -= window.scrollY;
-        } else {
-          console.log("Pfui")
-        }
+        console.log("Accounting for ", localHint.element)
+        console.log("scrollX: ", window.scrollX)
+        console.log("scrollY: ", window.scrollY)
+        localHint.rect.left -= window.scrollX;
+        localHint.rect.top -= window.scrollY;
       }
       el.style.left = localHint.rect.left + "px";
       el.style.top = localHint.rect.top + "px";
@@ -475,6 +490,7 @@ class LinkHintsMode {
       hintDescriptor: desc,
       linkText: desc.linkText,
       stableSortCount: ++this.stableSortCount,
+      // parentDialog: parentDialog,
     });
   }
 
@@ -779,10 +795,11 @@ class LinkHintsMode {
   }
 
   removeHintMarkers() {
-    if (this.hintMarkerContainingDiv) {
-      DomUtils.removeElement(this.hintMarkerContainingDiv);
+    if (this.hintMarkerContainingDivs) {
+      this.hintMarkerContainingDivs.values().forEach((d) =>
+        DomUtils.removeElement(d));
     }
-    this.hintMarkerContainingDiv = null;
+    this.hintMarkerContainingDivs = null;
   }
 }
 
