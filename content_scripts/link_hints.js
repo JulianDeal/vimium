@@ -413,7 +413,7 @@ class LinkHintsMode {
     this.hintMarkerContainingDivs = new Map();
 
     // Create the divs
-    this.markerContainers.forEach((markers, topLevelContainer) => {
+    markerContainers.forEach((markers, topLevelContainer) => {
       const elements = markers.map((m) => m.element);
       const containerDiv = DomUtils.addElementsToPage(
         elements,
