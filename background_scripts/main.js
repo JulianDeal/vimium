@@ -181,10 +181,9 @@ const BackgroundCommands = {
           if (newTabUrl == "pages/blank.html") {
             // "pages/blank.html" does not work in incognito mode, so fall back to "chrome://newtab"
             // instead.
-            newTabUrl =
-              request.tab.incognito
-                ? Settings.defaultOptions.newTabUrl
-                : chrome.runtime.getURL(newTabUrl);
+            newTabUrl = request.tab.incognito
+              ? Settings.defaultOptions.newTabUrl
+              : chrome.runtime.getURL(newTabUrl);
           }
           request.urls = [newTabUrl];
         }
@@ -199,7 +198,7 @@ const BackgroundCommands = {
         incognito: request.registryEntry.options.incognito || false,
       };
       await chrome.windows.create(windowConfig);
-      callback(request)
+      callback(request);
     } else {
       let openNextUrl;
       const urls = request.urls.slice().reverse();
@@ -700,11 +699,12 @@ globalThis.runTests = () => open(chrome.runtime.getURL("tests/dom_tests/dom_test
 //
 
 // Show notification on upgrade.
-const showUpgradeMessageIfNecessary = async function () {
+const showUpgradeMessageIfNecessary = async function (onInstalledDetails) {
   const currentVersion = Utils.getCurrentVersion();
-  const previousVersion = Settings.get("previousVersion");
+  // previousVersion will be null on new installs.
+  const previousVersion = onInstalledDetails.previousVersion;
 
-  if (Utils.compareVersions(currentVersion, previousVersion) != 1) {
+  if (!previousVersion || Utils.compareVersions(currentVersion, previousVersion) != 1) {
     return;
   }
   const currentVersionNumbers = currentVersion.split(".");
@@ -712,8 +712,6 @@ const showUpgradeMessageIfNecessary = async function () {
 
   const majorVersionHasChanged =
     currentVersionNumbers.slice(0, 2).join(".") !== previousVersionNumbers.slice(0, 2).join(".");
-
-  Settings.set("previousVersion", currentVersion);
 
   // We do not show an upgrade message for patch/silent releases. Such releases have the same
   // major and minor version numbers. We do, however, update the recorded previous version.
@@ -795,7 +793,7 @@ async function initializeExtension() {
 // The browser may have tabs already open. We inject the content scripts and Vimium's CSS
 // immediately so that the extension is running on the pages immediately after install, rather than
 // having to reload those pages.
-chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   Utils.debugLog("chrome.runtime.onInstalled");
 
   // NOTE(philc): In my testing, when the onInstalled event occurs, the onStartup event does not
@@ -807,15 +805,10 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
     // I believe this is because Firefox does this already. See https://stackoverflow.com/a/37132144
     // for commentary.
     !BgUtils.isFirefox() &&
-    (["chrome_update", "shared_module_update"].includes(reason));
+    (["chrome_update", "shared_module_update"].includes(details.reason));
   if (shouldInjectContentScripts) injectContentScriptsAndCSSIntoExistingTabs();
 
-  // Avoid showing the upgrade notification when previousVersion is undefined, which is the case for
-  // new installs.
-  if (Settings.get("previousVersion") == null) {
-    await Settings.set("previousVersion", Utils.getCurrentVersion());
-  }
-  await showUpgradeMessageIfNecessary();
+  await showUpgradeMessageIfNecessary(details);
 });
 
 // Note that this event is not fired when an incognito profile is started.
